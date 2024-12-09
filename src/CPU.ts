@@ -1,5 +1,5 @@
 import CreateMemory from "./CreateMemory";
-import { ADD_REG_REG, MOV_LIT_R1, MOV_LIT_R2 } from "./instructions";
+import { ADD_REG_REG, JMP_NOT_EQ, MOV_LIT_REG, MOV_MEM_REG, MOV_REG_MEM, MOV_REG_REG } from "./instructions";
 
 class CPU {
     private memory: DataView;
@@ -27,6 +27,14 @@ class CPU {
             console.log(`${name}: 0x${this.getRegister(name).toString(16).padStart(4, '0')}`)
         })
         console.log()
+    }
+
+    public viewMemoryAt(address: number) {
+        const nextEightBytes = Array.from({ length: 8 }, (_, i) =>
+            this.memory.getUint8(address + i)
+        ).map(v => `0x${v.toString(16).padStart(2, '0')}`)
+
+        console.log(`0x${address.toString(16).padStart(4, '0')}: ${nextEightBytes.join(' ')}`)
     }
 
     public getRegister(name: string): number {
@@ -59,16 +67,33 @@ class CPU {
 
     public execute(instruction: number) {
         switch (instruction) {
-            //move literal into r1 register
-            case MOV_LIT_R1: {
+            //move literal into register register
+            case MOV_LIT_REG: {
                 const literal = this.fetch16();
-                this.setRegister('r1', literal);
+                const register = (this.fetch() % this.registerNames.length) * 2
+                this.registers.setUint16(register, literal)
                 return;
             }
-            //move literal into r2 register
-            case MOV_LIT_R2: {
-                const literal = this.fetch16();
-                this.setRegister('r2', literal);
+            //move register to register
+            case MOV_REG_REG: {
+                const registerFrom = (this.fetch() % this.registerNames.length) * 2
+                const registerTo = (this.fetch() % this.registerNames.length) * 2
+                const value = this.registers.getUint16(registerFrom)
+                this.registers.setUint16(registerTo, value)
+                return;
+            }
+            case MOV_REG_MEM: {
+                const registerFrom = (this.fetch() % this.registerNames.length) * 2
+                const address = this.fetch16()
+                const value = this.registers.getUint16(registerFrom)
+                this.memory.setUint16(address, value)
+                return;
+            }
+            case MOV_MEM_REG: {
+                const address = this.fetch16()
+                const registerTo = (this.fetch() % this.registerNames.length) * 2
+                const value = this.memory.getUint16(address)
+                this.registers.setUint16(registerTo, value)
                 return;
             }
             //Add 2 registers
@@ -80,6 +105,15 @@ class CPU {
                 const registerValue2 = this.registers.getUint16(r2 * 2);
 
                 this.setRegister('acc', registerValue1 + registerValue2)
+                return;
+            }
+
+            case JMP_NOT_EQ: {
+                const value = this.fetch16();
+                const address = this.fetch16();
+                if (value !== this.getRegister('acc'))
+                    this.setRegister('ip', address)
+
                 return;
             }
         }
