@@ -19,8 +19,8 @@ class CPU {
             map[name] = i * 2;
             return map;
         }, {});
-        this.setRegister('sp', memory.byteLength - 1 - 1); // starting from last to first
-        this.setRegister('fp', memory.byteLength - 1 - 1); // starting from last to first
+        this.setRegister('sp', 0xffff - 1); // starting from last to first
+        this.setRegister('fp', 0xffff - 1); // starting from last to first
         this.stackFrameSize = 0;
     }
     debug() {
@@ -90,11 +90,10 @@ class CPU {
             }
             //Add 2 registers
             case instructions_1.ADD_REG_REG: {
-                const r1 = this.fetch();
-                const r2 = this.fetch();
-                const registerValue1 = this.registers.getUint16(r1 * 2); // the value we got from the instruction corresponds to the index that we originally specified in the register names, thats why we are multiplying it by 2
-                // 0->0, 1->2, 2->4, etc
-                const registerValue2 = this.registers.getUint16(r2 * 2);
+                const r1 = this.fetchRegisterIndex();
+                const r2 = this.fetchRegisterIndex();
+                const registerValue1 = this.registers.getUint16(r1);
+                const registerValue2 = this.registers.getUint16(r2);
                 this.setRegister('acc', registerValue1 + registerValue2);
                 return;
             }
@@ -137,6 +136,9 @@ class CPU {
             case instructions_1.RET: {
                 this.popState();
                 return;
+            }
+            case instructions_1.HLT: {
+                return true;
             }
         }
     }
@@ -191,6 +193,12 @@ class CPU {
     step() {
         const instruction = this.fetch();
         return this.execute(instruction);
+    }
+    run() {
+        const halt = this.step();
+        if (!halt) {
+            setImmediate(() => this.run());
+        }
     }
 }
 exports.default = CPU;

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.RET = exports.CAL_REG = exports.CAL_LIT = exports.POP = exports.PSH_REG = exports.PSH_LIT = exports.JMP_NOT_EQ = exports.ADD_REG_REG = exports.MOV_REG_REG = exports.MOV_REG_MEM = exports.MOV_MEM_REG = exports.MOV_LIT_REG = void 0;
+exports.HLT = exports.RET = exports.CAL_REG = exports.CAL_LIT = exports.POP = exports.PSH_REG = exports.PSH_LIT = exports.JMP_NOT_EQ = exports.ADD_REG_REG = exports.MOV_REG_REG = exports.MOV_REG_MEM = exports.MOV_MEM_REG = exports.MOV_LIT_REG = void 0;
 const MOV_LIT_REG = 0x10; // Move literal to register
 exports.MOV_LIT_REG = MOV_LIT_REG;
 const MOV_REG_REG = 0x11; // Move register to register
@@ -25,3 +25,5 @@ const CAL_REG = 0x5F; // get subroutine address from a register
 exports.CAL_REG = CAL_REG;
 const RET = 0x60; // Return from subroutine
 exports.RET = RET;
+const HLT = 0xFF;
+exports.HLT = HLT;

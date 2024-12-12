@@ -2,7 +2,9 @@ import CPU from "./CPU";
 import CreateMemory from "./CreateMemory";
 import * as readline from 'readline'
 
-import { ADD_REG_REG, CAL_LIT, JMP_NOT_EQ, MOV_LIT_REG, MOV_MEM_REG, MOV_REG_MEM, MOV_REG_REG, POP, PSH_LIT, PSH_REG, RET } from "./instructions";
+import { ADD_REG_REG, CAL_LIT, HLT, JMP_NOT_EQ, MOV_LIT_REG, MOV_MEM_REG, MOV_REG_MEM, MOV_REG_REG, POP, PSH_LIT, PSH_REG, RET } from "./instructions";
+import MemoryMapper from "./MemoryMapper";
+import CreateScreenDevice from "./screen-device";
 
 const IP = 0
 const ACC = 1
@@ -17,89 +19,126 @@ const R8 = 9
 const SP = 10
 const FP = 11
 
+const MM = new MemoryMapper()
 const memory = CreateMemory(256 * 256);
+MM.map(memory, 0, 0xffff) // entire addres space
+
+// map 0xff bytes of the address for the stdout (output device)
+MM.map(CreateScreenDevice(), 0x3000, 0x30ff, true)
 const writableBytes = new Uint8Array(memory.buffer);
-
-const cpu = new CPU(memory);
-
-const subroutineAddress = 0x3000
+const cpu = new CPU(MM);
 let i = 0;
 
-writableBytes[i++] = PSH_LIT // psh 0x3333
-writableBytes[i++] = 0x33
-writableBytes[i++] = 0x33
+const writeCharacterToScreen = (char: String, command: number, position: number) => {
+    writableBytes[i++] = MOV_LIT_REG // moving the H into register R1
+    writableBytes[i++] = command
+    writableBytes[i++] = char.charCodeAt(0)
+    writableBytes[i++] = R1
 
-writableBytes[i++] = PSH_LIT // psh 0x2222
-writableBytes[i++] = 0x22
-writableBytes[i++] = 0x22
+    writableBytes[i++] = MOV_REG_MEM
+    writableBytes[i++] = R1
+    writableBytes[i++] = 0x30
+    writableBytes[i++] = position
+}
 
-writableBytes[i++] = PSH_LIT // psh 0x1111
-writableBytes[i++] = 0x11
-writableBytes[i++] = 0x11
+writeCharacterToScreen(' ', 0xff, 0)
+for (let i = 0; i < 0xff; i++) {
+    const command = i % 2 === 0 ? 0x01 : 0x02
+    writeCharacterToScreen('*', command, i)
+}
+// "Hello World".split('').forEach((char, index) => {
+//     writeCharacterToScreen(char, 0x02, index)
+// })
+writeCharacterToScreen('\n', 0x02, 0xff*2)
+writableBytes[i++] = HLT
+cpu.run()
 
-writableBytes[i++] = MOV_LIT_REG // mov 0x1234, r1
-writableBytes[i++] = 0x12 // psh 0x3333
-writableBytes[i++] = 0x34
-writableBytes[i++] = R1
+// ------------------------------------------------------------------------------
+// From 4th video
+// const writableBytes = new Uint8Array(memory.buffer);
 
-writableBytes[i++] = MOV_LIT_REG // mov 0x5678, r4
-writableBytes[i++] = 0x56
-writableBytes[i++] = 0x78
-writableBytes[i++] = R4
+// const cpu = new CPU(MM);
 
-writableBytes[i++] = PSH_LIT // psh 0x0000 (no arguments)
-writableBytes[i++] = 0x00
-writableBytes[i++] = 0x00
+// const subroutineAddress = 0x3000
+// let i = 0;
 
-writableBytes[i++] = CAL_LIT;
-writableBytes[i++] = (subroutineAddress & 0xff00) >> 8
-writableBytes[i++] = (subroutineAddress & 0x00ff)
+// writableBytes[i++] = PSH_LIT // psh 0x3333
+// writableBytes[i++] = 0x33
+// writableBytes[i++] = 0x33
 
-writableBytes[i++] = PSH_LIT // psh 0x4444 just a test to see if the stack is working correctly
-writableBytes[i++] = 0x44
-writableBytes[i++] = 0x44
+// writableBytes[i++] = PSH_LIT // psh 0x2222
+// writableBytes[i++] = 0x22
+// writableBytes[i++] = 0x22
 
-i = subroutineAddress // go to the mentioned subroutine
+// writableBytes[i++] = PSH_LIT // psh 0x1111
+// writableBytes[i++] = 0x11
+// writableBytes[i++] = 0x11
 
-writableBytes[i++] = PSH_LIT // psh 0x0101
-writableBytes[i++] = 0x01
-writableBytes[i++] = 0x02
+// writableBytes[i++] = MOV_LIT_REG // mov 0x1234, r1
+// writableBytes[i++] = 0x12 // psh 0x3333
+// writableBytes[i++] = 0x34
+// writableBytes[i++] = R1
 
-writableBytes[i++] = PSH_LIT // psh 0x0304
-writableBytes[i++] = 0x03
-writableBytes[i++] = 0x04
+// writableBytes[i++] = MOV_LIT_REG // mov 0x5678, r4
+// writableBytes[i++] = 0x56
+// writableBytes[i++] = 0x78
+// writableBytes[i++] = R4
 
-writableBytes[i++] = PSH_LIT // psh 0x0506
-writableBytes[i++] = 0x05
-writableBytes[i++] = 0x06
+// writableBytes[i++] = PSH_LIT // psh 0x0000 (no arguments)
+// writableBytes[i++] = 0x00
+// writableBytes[i++] = 0x00
 
-writableBytes[i++] = MOV_LIT_REG // mov 0x0708, r1
-writableBytes[i++] = 0x07
-writableBytes[i++] = 0x08
-writableBytes[i++] = R1
+// writableBytes[i++] = CAL_LIT;
+// writableBytes[i++] = (subroutineAddress & 0xff00) >> 8
+// writableBytes[i++] = (subroutineAddress & 0x00ff)
 
-writableBytes[i++] = MOV_LIT_REG // mov 0x090A, r8
-writableBytes[i++] = 0x09
-writableBytes[i++] = 0x0A
-writableBytes[i++] = R8
+// writableBytes[i++] = PSH_LIT // psh 0x4444 just a test to see if the stack is working correctly
+// writableBytes[i++] = 0x44
+// writableBytes[i++] = 0x44
 
-writableBytes[i++] = RET
+// i = subroutineAddress // go to the mentioned subroutine
 
-cpu.debug()
-cpu.viewMemoryAt(cpu.getRegister('ip'))
-cpu.viewMemoryAt(0xffff - 1 - 42, 44) // because this function shows 7 bytes
+// writableBytes[i++] = PSH_LIT // psh 0x0101
+// writableBytes[i++] = 0x01
+// writableBytes[i++] = 0x02
 
-const r1 = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-})
+// writableBytes[i++] = PSH_LIT // psh 0x0304
+// writableBytes[i++] = 0x03
+// writableBytes[i++] = 0x04
 
-r1.on('line', () => {
-    cpu.step()
-    cpu.debug()
-    cpu.viewMemoryAt(cpu.getRegister('ip'))
-    cpu.viewMemoryAt(0xffff - 1 - 42, 44)
-})
+// writableBytes[i++] = PSH_LIT // psh 0x0506
+// writableBytes[i++] = 0x05
+// writableBytes[i++] = 0x06
+
+// writableBytes[i++] = MOV_LIT_REG // mov 0x0708, r1
+// writableBytes[i++] = 0x07
+// writableBytes[i++] = 0x08
+// writableBytes[i++] = R1
+
+// writableBytes[i++] = MOV_LIT_REG // mov 0x090A, r8
+// writableBytes[i++] = 0x09
+// writableBytes[i++] = 0x0A
+// writableBytes[i++] = R8
+
+// writableBytes[i++] = RET
+
+// cpu.debug()
+// cpu.viewMemoryAt(cpu.getRegister('ip'))
+// cpu.viewMemoryAt(0xffff - 1 - 42, 44) // because this function shows 7 bytes
+
+// const r1 = readline.createInterface({
+//     input: process.stdin,
+//     output: process.stdout
+// })
+
+// r1.on('line', () => {
+//     cpu.step()
+//     cpu.debug()
+//     cpu.viewMemoryAt(cpu.getRegister('ip'))
+//     cpu.viewMemoryAt(0xffff - 1 - 42, 44)
+// })
+
+// ----------------------------------------------------------------------
 
 // From 3rd video
 // writableBytes[i++] = MOV_LIT_REG // mov 0x5151, r1
