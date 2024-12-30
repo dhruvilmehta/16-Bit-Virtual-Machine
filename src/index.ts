@@ -1,57 +1,102 @@
 import CPU from "./CPU";
 import CreateMemory from "./CreateMemory";
-import * as readline from 'readline'
-
-import { ADD_REG_REG, CAL_LIT, HLT, JMP_NOT_EQ, MOV_LIT_REG, MOV_MEM_REG, MOV_REG_MEM, MOV_REG_REG, POP, PSH_LIT, PSH_REG, RET } from "./instructions";
-import MemoryMapper from "./MemoryMapper";
-import CreateScreenDevice from "./screen-device";
-
-const IP = 0
-const ACC = 1
-const R1 = 2
-const R2 = 3
-const R3 = 4
-const R4 = 5
-const R5 = 6
-const R6 = 7
-const R7 = 8
-const R8 = 9
-const SP = 10
-const FP = 11
+import MemoryMapper, { ScreenDevice } from "./MemoryMapper";
 
 const MM = new MemoryMapper()
-const memory = CreateMemory(256 * 256);
-MM.map(memory, 0, 0xffff) // entire addres space
 
-// map 0xff bytes of the address for the stdout (output device)
-MM.map(CreateScreenDevice(), 0x3000, 0x30ff, true)
-const writableBytes = new Uint8Array(memory.buffer);
+const dataViewMethods = [
+    'getUint8',
+    'getUint16',
+    'setUint8',
+    'setUint16'
+]
+
+const createBankedMemory = (n: number, bankSize: number, cpu: CPU) => {
+    const bankBuffers = Array.from({ length: n }, () => new ArrayBuffer(bankSize))
+    const banks = bankBuffers.map(ab => new DataView(ab))
+
+    const forwardToDataView = (name: string) => (...args: any[]) => {
+        const bankIndex = cpu.getRegister("mb") % n;
+        const memoryBankToUse = banks[bankIndex];
+        return (memoryBankToUse as any)[name](...args); // Type assertion
+    };
+
+    const methods = dataViewMethods.reduce<Record<string, Function>>((dvOut, fnName) => {
+        dvOut[fnName] = forwardToDataView(fnName)
+        return dvOut;
+    }, {})
+
+    return methods;
+}
+
+const bankSize = 0xff;
+const nBanks = 8;
 const cpu = new CPU(MM);
-let i = 0;
 
-const writeCharacterToScreen = (char: String, command: number, position: number) => {
-    writableBytes[i++] = MOV_LIT_REG // moving the H into register R1
-    writableBytes[i++] = command
-    writableBytes[i++] = char.charCodeAt(0)
-    writableBytes[i++] = R1
+const memoryBankDevice = createBankedMemory(nBanks, bankSize, cpu)
+MM.map(memoryBankDevice as any, 0, bankSize)
 
-    writableBytes[i++] = MOV_REG_MEM
-    writableBytes[i++] = R1
-    writableBytes[i++] = 0x30
-    writableBytes[i++] = position
-}
+const regularMemory = CreateMemory(0xff00)
+MM.map(regularMemory, bankSize, 0xffff, true)
 
-writeCharacterToScreen(' ', 0xff, 0)
-for (let i = 0; i < 0xff; i++) {
-    const command = i % 2 === 0 ? 0x01 : 0x02
-    writeCharacterToScreen('*', command, i)
-}
-// "Hello World".split('').forEach((char, index) => {
-//     writeCharacterToScreen(char, 0x02, index)
-// })
-writeCharacterToScreen('\n', 0x02, 0xff*2)
-writableBytes[i++] = HLT
-cpu.run()
+console.log("Writing value 1 to address 0")
+MM.setUint16(0, 1)
+console.log("Reading value from address 0", MM.getUint16(0))
+
+console.log("Switching bank from 0 to 1")
+cpu.setRegister('mb', 1)
+console.log("Reading value at address 0", MM.getUint16(0))
+
+console.log("Writing value 42 to address 0")
+MM.setUint16(0, 42)
+
+console.log("Switching bank from 1 to 2")
+cpu.setRegister('mb', 2)
+
+console.log("Reading value at address 0", MM.getUint16(0))
+
+console.log("switching bank from 2 to 1")
+cpu.setRegister('mb', 1)
+
+console.log("Reading value at address 0", MM.getUint16(0))
+
+console.log("Switching bank from 1 to 0")
+
+cpu.setRegister('mb', 0)
+console.log("Reading value at address 0", MM.getUint16(0))
+
+// const memory = CreateMemory(256 * 256);
+// MM.map(memory, 0, 0xffff) // entire addres space
+
+// // map 0xff bytes of the address for the stdout (output device)
+// MM.map(CreateScreenDevice(), 0x3000, 0x30ff, true)
+// const writableBytes = new Uint8Array(memory.buffer);
+// const cpu = new CPU(MM);
+// let i = 0;
+
+// const writeCharacterToScreen = (char: String, command: number, position: number) => {
+//     writableBytes[i++] = MOV_LIT_REG // moving the H into register R1
+//     writableBytes[i++] = command
+//     writableBytes[i++] = char.charCodeAt(0)
+//     writableBytes[i++] = R1
+
+//     writableBytes[i++] = MOV_REG_MEM
+//     writableBytes[i++] = R1
+//     writableBytes[i++] = 0x30
+//     writableBytes[i++] = position
+// }
+
+// writeCharacterToScreen(' ', 0xff, 0)
+// for (let i = 0; i < 0xff; i++) {
+//     const command = i % 2 === 0 ? 0x01 : 0x02
+//     writeCharacterToScreen('*', command, i)
+// }
+// // "Hello World".split('').forEach((char, index) => {
+// //     writeCharacterToScreen(char, 0x02, index)
+// // })
+// writeCharacterToScreen('\n', 0x02, 0xff*2)
+// writableBytes[i++] = HLT
+// cpu.run()
 
 // ------------------------------------------------------------------------------
 // From 4th video

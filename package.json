@@ -1,5 +1,8 @@
 {
   "devDependencies": {
     "@types/node": "^22.10.1"
+  },
+  "dependencies": {
+    "arcsecond": "^5.0.0"
   }
 }
